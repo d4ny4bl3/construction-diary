@@ -1,9 +1,11 @@
-# from typing import Any
 from django.db import models
-from django.db.models import Sum
+from django.db.models import Sum, F
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.utils.text import slugify
+
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 
 
 class Project(models.Model):
@@ -18,7 +20,7 @@ class Project(models.Model):
     start_date = models.DateField(verbose_name="Začátek projektu")
     end_date = models.DateField(null=True, blank=True, verbose_name="Konec projektu")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="planned", verbose_name="Stav")
-    total_cost = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    total_cost = models.DecimalField(null=True, blank=True, max_digits=20, decimal_places=2, default=0)
     slug = models.SlugField(max_length=100)
     
     class Meta:
@@ -32,68 +34,103 @@ class Project(models.Model):
         if not self.slug:
             self.slug = slugify(self.name)
         super().save(*args, **kwargs)
-    
+
     def update_total_cost(self):
-        self.total_cost = self.materials.aggregate(total=Sum("price"))["total"] or 0
+        """
+        Aktualizuje celkové náklady projektu na základě použitých materiálů v denních záznamech
+        """
+        self.total_cost = (
+                self.daily_logs.aggregate(
+                    total=Sum(
+                        F("daily_usages__used_quantity") * F("daily_usages__material__price_per_unit")
+                    )
+                )["total"] or 0
+        )
         self.save()
-    
-    
+
+
 class Material(models.Model):
-    project = models.ForeignKey(Project, related_name="materials", on_delete=models.CASCADE)
+    UNIT_CHOICES = [
+        ("ks", "ks"),
+        ("kg", "kg"),
+        ("m", "m"),
+    ]
+
     name = models.CharField(max_length=150, verbose_name="Materiál")
     quantity = models.IntegerField(validators=[MinValueValidator(1)], verbose_name="Množství")
+    unit = models.CharField(max_length=20, choices=UNIT_CHOICES, null=True, verbose_name="Jednotka")
     price = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Cena")
-    
+    price_per_unit = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+
     class Meta:
         verbose_name_plural = "Materiály"
         verbose_name = "Materiál"
-        
-    def __str__(self):
-        return f"{self.name} - {self.quantity} ks"
-    
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        self.project.update_total_cost()
 
-    def delete(self, *args, **kwargs):
-        super().delete(*args, **kwargs)
-        self.project.update_total_cost()
-    
-    
+    def __str__(self):
+        return f"{self.name} - {self.quantity} {self.unit}"
+
+    def save(self, *args, **kwargs):
+        if not self.price_per_unit and self.quantity > 0:
+            self.price_per_unit = self.price / self.quantity
+        super().save(*args, **kwargs)
+
+
 class DailyLog(models.Model):
-    project = models.ForeignKey(Project, related_name="daily_logs", on_delete=models.CASCADE)
+    project = models.ForeignKey(Project, related_name="daily_logs", on_delete=models.PROTECT, null=True, verbose_name="Projekt")
     date = models.DateField(verbose_name="Datum")
     work_time = models.DurationField(verbose_name="Doba práce")
-    description = models.CharField(max_length=500, verbose_name="Popis činnosti")
-    weather_temperature = models.DecimalField(null=True, blank=True, max_digits=3, decimal_places=2, verbose_name="Teplota") 
-    
+    description = models.TextField(verbose_name="Popis činnosti")
+    temperature = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True, verbose_name="Teplota")
+
     class Meta:
         verbose_name_plural = "Denní zápisy"
         verbose_name = "Denní zápis"
-    
+
     def __str__(self):
-        return f"{self.project.name} - {self.date}"
-    
-    
+        return f"{self.date} - {self.project.name}"
+
+
 class MaterialUsage(models.Model):
     daily_log = models.ForeignKey(DailyLog, related_name="daily_usages", on_delete=models.CASCADE)
-    material = models.ForeignKey(Material, related_name="material_usages", on_delete=models.CASCADE, verbose_name="Použitý materiál")
-    used_quantity = models.IntegerField(verbose_name="Použité množství")
-    
+    material = models.ForeignKey(Material, related_name="material_usages", on_delete=models.CASCADE)
+    used_quantity = models.IntegerField(validators=[MinValueValidator(1)], verbose_name="Použité množství")
+
     class Meta:
         verbose_name_plural = "Použité materiály"
         verbose_name = "Použitý materiál"
-    
+
     def __str__(self):
-        return f"{self.daily_log} : {self.material.name} - {self.used_quantity} ks"
-    
-    def clean(self, *args, **kwargs):
-        super().clean()
+        return f"{self.daily_log.date} - {self.material.name}"
+
+    def clean(self):
         if self.used_quantity > self.material.quantity:
             raise ValidationError("Nedostatečné množství materiálu")
-        
-        # odečte použité množství od dostupného množství v Material
+
+    def save(self, *args, **kwargs):
+        """
+        Odebere požadované množství z Material.quantity a přepočítá celkové náklady projektu.
+        """
+        # Zavolání validace
+        self.full_clean()
+
         self.material.quantity -= self.used_quantity
-        self.material.save()  # uloží aktualizované množství v Material
-        
-        super().save(*args, **kwargs)  # uloží záznam v DailyLog
+        self.material.save()
+        super().save(*args, **kwargs)
+
+        #  přepočet celkových nákladů
+        self.daily_log.project.update_total_cost()
+
+
+@receiver(post_delete, sender=MaterialUsage)
+def return_material_stock(sender, instance, **kwargs):
+    """
+    Vrátí použité množství materiálu zpět a přepočítá celkové náklady projektu.
+    """
+    # Vrácení použitého množství do skladu
+    if instance.material:
+        instance.material.quantity += instance.used_quantity
+        instance.material.save()
+
+    # # Přepočet celkových nákladů projektu
+    if instance.daily_log and instance.daily_log.project:
+        instance.daily_log.project.update_total_cost()
