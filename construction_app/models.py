@@ -1,5 +1,6 @@
 from django.db import models
 from django.db.models import Sum, F
+from datetime import timedelta
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.utils.text import slugify
@@ -48,6 +49,13 @@ class Project(models.Model):
         )
         self.save()
 
+    def total_work_time(self):
+        """
+        Spočítá celkový čas práce ze všech denních záznamů
+        """
+        total_time = self.daily_logs.aggregate(total=Sum("work_time"))["total"]
+        return total_time or timedelta(0)
+
 
 class Material(models.Model):
     UNIT_CHOICES = [
@@ -77,9 +85,10 @@ class Material(models.Model):
 
 class DailyLog(models.Model):
     project = models.ForeignKey(Project, related_name="daily_logs", on_delete=models.PROTECT, null=True, verbose_name="Projekt")
+    title = models.CharField(max_length=150, null=True, verbose_name="Název")
+    description = models.TextField(null=True, blank=True, verbose_name="Popis činnosti")
     date = models.DateField(verbose_name="Datum")
     work_time = models.DurationField(verbose_name="Doba práce")
-    description = models.TextField(verbose_name="Popis činnosti")
     temperature = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True, verbose_name="Teplota")
 
     class Meta:
