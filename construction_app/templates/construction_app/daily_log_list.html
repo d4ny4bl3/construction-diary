@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Materiály
+{% endblock %}
+
+
+{% block content %}
+
+    <h2>Denní záznamy</h2>
+
+    <a href="{% url 'daily_log-create' %}">Přidej nový</a>
+
+<table border="1">
+    <thead>
+        <tr>
+            <th>Projekt</th>
+            <th>Název</th>
+            <th>Popis</th>
+            <th>Datum</th>
+            <th>Čas práce</th>
+            <th>Teplota</th>
+            <th>Akce</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for daily_log in daily_logs %}
+            <tr>
+                <td>{{ daily_log.project }}</td>
+                <td>{{ daily_log.title }}</td>
+                <td>{{ daily_log.description }}</td>
+                <td>{{ daily_log.date }}</td>
+                <td>{{ daily_log.work_time }}</td>
+                <td>{{ daily_log.temperature }}</td>
+                <td>
+                    <a href="{% url 'daily_log-edit' daily_log.pk %}">Upravit</a>
+                    <a href="{% url 'daily_log-delete' daily_log.pk %}"
+                        onclick="return confirm('Opravdu si přejete tento denní záznam smazat?');">Smazat</a>
+                </td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

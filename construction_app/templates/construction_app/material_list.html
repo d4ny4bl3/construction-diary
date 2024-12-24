@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Materiály
+{% endblock %}
+
+
+{% block content %}
+
+    <h2>Materiály</h2>
+
+    <a href="{% url 'material-create' %}">Přidej nový</a>
+
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Název</th>
+                <th>Množství</th>
+                <th>Cena</th>
+                <th>Cena za jednotku</th>
+                <th>Akce</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for material in materials %}
+            <tr>
+                <td>{{ material.name }}</td>
+                <td>{{ material.quantity }} {{ material.unit }}</td>
+                <td>{{ material.price }}</td>
+                <td>{{ material.price_per_unit }}</td>
+                <td>
+                    <a href="{% url 'material-edit' material.pk %}">Upravit</a>
+                    <a href="{% url 'material-delete' material.pk %}"
+                       onclick="return confirm('Opravdu si přejete tento materiál smazat?');">Smazat</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+{% endblock %}

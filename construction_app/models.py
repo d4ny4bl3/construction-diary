@@ -3,6 +3,7 @@ from django.db.models import Sum, F
 from datetime import timedelta
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
+from django.utils import timezone
 from django.utils.text import slugify
 
 from django.db.models.signals import post_delete
@@ -18,7 +19,7 @@ class Project(models.Model):
     
     name = models.CharField(max_length=100, unique=True, verbose_name="Název")
     location = models.CharField(max_length=50, verbose_name="Místo")
-    start_date = models.DateField(verbose_name="Začátek projektu")
+    start_date = models.DateField(default= timezone.now, verbose_name="Začátek projektu")
     end_date = models.DateField(null=True, blank=True, verbose_name="Konec projektu")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="planned", verbose_name="Stav")
     total_cost = models.DecimalField(null=True, blank=True, max_digits=20, decimal_places=2, default=0)

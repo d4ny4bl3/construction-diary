@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Construction Diary{% endblock %}</title>
+</head>
+<body>
+
+    <header>
+
+    </header>
+
+    <div>
+        <nav>
+            <ul>
+                <li><a href="{% url 'dashboard' %}">Dashboard</a></li>
+                <li><a href="{% url 'projects' %}">Projekty</a></li>
+                <li><a href="{% url 'materials' %}">Materiály</a></li>
+                <li><a href="{% url 'daily_logs' %}">Denní záznamy</a></li>
+            </ul>
+
+        </nav>
+
+        <main>
+          {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <footer>
+      <p>© 2024 Construction Diary</p>
+    </footer>
+
+</body>
+</html>

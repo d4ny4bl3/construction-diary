@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Denní záznam
+{% endblock %}
+
+{% block content %}
+    <h2>Denní záznam</h2>
+
+    <form method="post">
+        {% csrf_token %}
+        {{ daily_log_form.as_p }}
+        <h3>Použité materiály</h3>
+        {{ material_usage_formset.management_form }}
+        {% for form in material_usage_formset %}
+            {{ form.as_p }}
+        {% endfor %}
+        <button type="submit">Vytvoř</button>
+    </form>
+
+    <a href="{% url 'daily_logs' %}">
+        <button type="button">Zpět</button>
+    </a>
+{% endblock %}

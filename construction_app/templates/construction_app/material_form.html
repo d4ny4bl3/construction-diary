@@ -1,0 +1,19 @@
+{% extends "base.html"%}
+
+{% block title %}
+    Nový materiál
+{% endblock %}
+
+{% block content %}
+    <h2>Nový materiál</h2>
+
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Vytvořit</button>
+    </form>
+
+    <a href="{% url 'materials' %}">
+        <button type="button">Zpět</button>
+    </a>
+{% endblock %}
